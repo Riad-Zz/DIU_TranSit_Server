@@ -32,8 +32,8 @@ async function run() {
     app.post("/users",async(req,res)=>{
         const {name,email} = req.body ;
         const existingUser =await sql`SELECT * FROM users WHERE email = ${email}` ;
-        if(existingUser > 0){
-            res.send("Already Exist")
+        if(existingUser.length > 0){
+            return res.send("Already Exist")
         }
         const result = await sql `INSERT INTO users (name,email) VALUES (${name},${email}) RETURNING id`
         const id = result[0].id
