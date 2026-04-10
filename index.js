@@ -21,12 +21,14 @@ app.get("/", (req, res) => {
 async function run() {
   try {
 
+    // ---------------- APi to get all user Information from database Database -------------------- 
     app.get("/users",async(req,res)=>{
         const query = sql`SELECT * FROM users`
         const result = await query
         res.json(result) ;
     })
 
+    // ---------------- APi to Save user Information to Database -------------------- 
     app.post("/users",async(req,res)=>{
         const {name,email} = req.body ;
         const existingUser =await sql`SELECT * FROM users WHERE email = ${email}` ;
