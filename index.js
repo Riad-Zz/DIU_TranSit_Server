@@ -23,7 +23,13 @@ async function run() {
 
     // ---------------- APi to get all user Information from database Database -------------------- 
     app.get("/users",async(req,res)=>{
-        const query = sql`SELECT * FROM users`
+        const email = req.query.email ;
+        let query = {} ;
+        if(email){
+          query = sql`SELECT * FROM users WHERE email=${email}`
+        }else{
+          query = sql`SELECT * FROM users`
+        }
         const result = await query
         res.json(result) ;
     })
