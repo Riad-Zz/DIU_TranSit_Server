@@ -12,6 +12,37 @@ app.use(express.json());
 
 const connectionString = process.env.DATABASE_URL;
 const sql = postgres(connectionString);
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./routesyncc-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+
+//-------------------FireBase Token Varify---------------------------
+const fireBaseTokenVarify = async (req, res, next) => {
+  // console.log('my token : ', req.headers.authorization) ;
+  if (!req.headers.authorization) {
+    //Not authozired
+    return res.status(401).send({ message: "Unauthorize Access ! " });
+  }
+  const token = req.headers.authorization.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorize Access ! " });
+  }
+
+  try {
+    const userInfo = await admin.auth().verifyIdToken(token);
+    // console.log(userInfo) ;
+    req.token_email = userInfo.email;
+    next();
+  } catch {
+    return res.status(401).send({ message: "Unauthorize Access ! " });
+  }
+    // console.log("Final Token : ", token);
+};
 
 // ============================ Test Api ===================================
 app.get("/", (req, res) => {
@@ -21,7 +52,7 @@ app.get("/", (req, res) => {
 async function run() {
   try {
     // ---------------- APi to get all user Information from database Database --------------------
-    app.get("/users", async (req, res) => {
+    app.get("/users",fireBaseTokenVarify ,async (req, res) => {
       const email = req.query.email;
       let query = {};
       if (email) {
@@ -34,7 +65,7 @@ async function run() {
     });
 
     // ---------------- APi to Save user Information to Database --------------------
-    app.post("/users", async (req, res) => {
+    app.post("/users",fireBaseTokenVarify ,async (req, res) => {
       const { name, email } = req.body;
       const existingUser =
         await sql`SELECT * FROM users WHERE email = ${email}`;
@@ -46,6 +77,7 @@ async function run() {
       const id = result[0].id;
       res.send({ id });
     });
+
 
     // APi to add varified student a role
     app.patch("/users", async (req, res) => {
@@ -70,9 +102,8 @@ async function run() {
     //   res.json(result);
     // });
 
-
     // APi to get schedule by day and also filter by starting ending locaion
-    app.get("/schedule", async (req, res) => {
+    app.get("/schedule",async (req, res) => {
       const { day, from, to } = req.query;
 
       try {
@@ -105,17 +136,16 @@ async function run() {
       }
     });
 
-    // api to get bus details by id 
-    app.get('/busses/:id',async(req,res)=>{
-      const {id} = req.params ;
-      const query = sql`select * from bus_routes where id = ${id}`
-      const result = await query ;
-      res.json(result) ;
-    })
+    // api to get bus details by id
+    app.get("/busses/:id",fireBaseTokenVarify ,async (req, res) => {
+      const { id } = req.params;
+      const query = sql`select * from bus_routes where id = ${id}`;
+      const result = await query;
+      res.json(result);
+    });
 
     // const result = await sql`SELECT 1 AS connected`;
     // console.log("Successfully connected to Supabase/PostgreSQL!", result);
-
   } catch (err) {
     console.error("Connection failed:", err);
   }
