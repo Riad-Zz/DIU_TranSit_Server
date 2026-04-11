@@ -105,9 +105,17 @@ async function run() {
       }
     });
 
-    const result = await sql`SELECT 1 AS connected`;
-    console.log("Successfully connected to Supabase/PostgreSQL!", result);
-    
+    // api to get bus details by id 
+    app.get('/busses/:id',async(req,res)=>{
+      const {id} = req.params ;
+      const query = sql`select * from bus_routes where id = ${id}`
+      const result = await query ;
+      res.json(result) ;
+    })
+
+    // const result = await sql`SELECT 1 AS connected`;
+    // console.log("Successfully connected to Supabase/PostgreSQL!", result);
+
   } catch (err) {
     console.error("Connection failed:", err);
   }
