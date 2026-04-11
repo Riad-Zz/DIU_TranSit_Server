@@ -47,7 +47,7 @@ async function run() {
       res.send({ id });
     });
 
-    // APi to add varified student a role 
+    // APi to add varified student a role
     app.patch("/users", async (req, res) => {
       const { user_id } = req.body;
       const result =
@@ -55,24 +55,59 @@ async function run() {
       res.send(result);
     });
 
-    // APi to add Varified student to student table 
+    // APi to add Varified student to student table
     app.post("/student", async (req, res) => {
-      const { studentId, edu_mail, user_id} = req.body;
+      const { studentId, edu_mail, user_id } = req.body;
       const result =
         await sql`INSERT INTO student(student_id,user_id,edu_mail) VALUES (${studentId},${user_id},${edu_mail}) RETURNING id`;
       const id = result[0].id;
       res.send({ id });
     });
 
+    // app.get("/student", async (req, res) => {
+    //   const { id } = req.query;
+    //   const result = await sql`SELECT * FROM student WHERE id = ${id}`;
+    //   res.json(result);
+    // });
 
-    app.get("/student", async (req, res) => {
-      const { id } = req.query;
-      const result = await sql`SELECT * FROM student WHERE id = ${id}`;
-      res.json(result);
+
+    // APi to get schedule by day and also filter by starting ending locaion
+    app.get("/schedule", async (req, res) => {
+      const { day, from, to } = req.query;
+
+      try {
+        // 1. Get routes that contain both stops (if provided)
+        let query = sql`SELECT * FROM bus_routes WHERE day = ${day}`;
+
+        if (from) query = sql`${query} AND stops_str ILIKE ${"%" + from + "%"}`;
+        if (to) query = sql`${query} AND stops_str ILIKE ${"%" + to + "%"}`;
+
+        const routes = await query;
+
+        // 2. Filter by sequence (The "Forward Only" logic)
+        const filtered = routes.filter((route) => {
+          if (from && to) {
+            const stops = route.stops_str
+              .split(", ")
+              .map((s) => s.toLowerCase());
+            const fromIndex = stops.indexOf(from.toLowerCase());
+            const toIndex = stops.indexOf(to.toLowerCase());
+
+            // Return true only if 'to' comes after 'from'
+            return fromIndex < toIndex;
+          }
+          return true;
+        });
+
+        res.json(filtered);
+      } catch (error) {
+        res.status(500).json({ error: "Database error" });
+      }
     });
 
     const result = await sql`SELECT 1 AS connected`;
     console.log("Successfully connected to Supabase/PostgreSQL!", result);
+    
   } catch (err) {
     console.error("Connection failed:", err);
   }
