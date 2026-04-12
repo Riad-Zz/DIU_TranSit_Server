@@ -117,11 +117,12 @@ async function run() {
       }
     });
 
-    // app.get("/student", async (req, res) => {
-    //   const { id } = req.query;
-    //   const result = await sql`SELECT * FROM student WHERE id = ${id}`;
-    //   res.json(result);
-    // });
+    // ----------------- get student by user id ------------------
+    app.get("/student/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await sql`SELECT * FROM student WHERE user_id = ${id}`;
+      res.json(result);
+    });
 
     // -------------------------- APi to get Combine Student Info from user + Student Table --------------------------
     app.get("/studentinfo", async (req, res) => {
@@ -278,7 +279,7 @@ async function run() {
 
     // -------------------------- Promote Admin (Set role to admin) --------------------------
     app.patch("/admin/users/promote/:id", async (req, res) => {
-      const { id } = req.params; 
+      const { id } = req.params;
       try {
         await sql`UPDATE users SET role = 'admin' WHERE id = ${id}`;
         res.status(200).send({ message: "Role updated to admin" });
@@ -289,8 +290,8 @@ async function run() {
 
     // -------------------------- Revoke (Set role to user and delete student entry using student_id) --------------------------
     app.patch("/admin/users/revoke/:id", async (req, res) => {
-      const { id } = req.params; 
-      const { student_id } = req.body; 
+      const { id } = req.params;
+      const { student_id } = req.body;
 
       try {
         await sql`UPDATE users SET role = 'user' WHERE id = ${id}`;
@@ -307,11 +308,10 @@ async function run() {
       }
     });
 
-
     // -------------------------- Delete (Total removal from users table + student table) --------------------------
     app.delete("/admin/users/:id", async (req, res) => {
-      const { id } = req.params; 
-      const { student_id } = req.body; 
+      const { id } = req.params;
+      const { student_id } = req.body;
 
       try {
         if (student_id) {
@@ -326,6 +326,66 @@ async function run() {
       } catch (error) {
         console.error(error);
         res.status(500).send({ error: "Total deletion failed." });
+      }
+    });
+
+    // Api to add info to applied list , update user name and update student info in student table 
+    app.post("/apply-transport-card", async (req, res) => {
+      const {
+        studentId,
+        fullName,
+        department,
+        academicYear,
+        academicSemester,
+        paidAmount,
+      } = req.body;
+
+      try {
+        const student = await sql`
+            SELECT id, user_id FROM student WHERE student_id = ${studentId}
+        `;
+
+        if (student.length === 0) {
+          return res.status(404).send({ message: "Student not found" });
+        }
+
+        const studentPk = student[0].id;
+        const userId = student[0].user_id;
+
+        // 1. Insert into card_apply table
+        await sql`
+            INSERT INTO card_apply (student_id, paid_amount, name, created_at)
+            VALUES (${studentPk}, ${paidAmount}, ${fullName}, NOW())
+        `;
+
+        // 2. Update student table with academic info
+        await sql`
+            UPDATE student
+            SET department = ${department},
+                academic_year = ${academicYear},
+                academic_semester = ${academicSemester},
+                card_status = 'pending'
+            WHERE id = ${studentPk}
+        `;
+
+        // 3. Update users table name
+        await sql`
+            UPDATE users
+            SET name = ${fullName}
+            WHERE id = ${userId}
+        `;
+
+        res
+          .status(200)
+          .send({
+            success: true,
+            message: "Application submitted and profiles updated!",
+          });
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ message: "Transaction failed", error: error.message });
       }
     });
 
