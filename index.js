@@ -14,12 +14,19 @@ const connectionString = process.env.DATABASE_URL;
 const sql = postgres(connectionString);
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./routesyncc-firebase-adminsdk.json");
+const decoded = Buffer.from(process.env.FIREBASE_KEY, "base64").toString(
+  "utf8",
+);
+
+// console.log(process.env.FIREBASE_KEY)
+
+const serviceAccount = JSON.parse(decoded);
+
+// const serviceAccount = require("./routesyncc-firebase-adminsdk.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
-
 
 //-------------------FireBase Token Varify---------------------------
 const fireBaseTokenVarify = async (req, res, next) => {
@@ -41,7 +48,7 @@ const fireBaseTokenVarify = async (req, res, next) => {
   } catch {
     return res.status(401).send({ message: "Unauthorize Access ! " });
   }
-    // console.log("Final Token : ", token);
+  // console.log("Final Token : ", token);
 };
 
 // ============================ Test Api ===================================
@@ -52,7 +59,7 @@ app.get("/", (req, res) => {
 async function run() {
   try {
     // ---------------- APi to get all user Information from database Database --------------------
-    app.get("/users",fireBaseTokenVarify ,async (req, res) => {
+    app.get("/users", fireBaseTokenVarify, async (req, res) => {
       const email = req.query.email;
       let query = {};
       if (email) {
@@ -65,7 +72,7 @@ async function run() {
     });
 
     // ---------------- APi to Save user Information to Database --------------------
-    app.post("/users",fireBaseTokenVarify ,async (req, res) => {
+    app.post("/users", fireBaseTokenVarify, async (req, res) => {
       const { name, email } = req.body;
       const existingUser =
         await sql`SELECT * FROM users WHERE email = ${email}`;
@@ -78,7 +85,6 @@ async function run() {
       res.send({ id });
     });
 
-
     // APi to add varified student a role
     app.patch("/users", async (req, res) => {
       const { user_id } = req.body;
@@ -90,10 +96,25 @@ async function run() {
     // APi to add Varified student to student table
     app.post("/student", async (req, res) => {
       const { studentId, edu_mail, user_id } = req.body;
-      const result =
-        await sql`INSERT INTO student(student_id,user_id,edu_mail) VALUES (${studentId},${user_id},${edu_mail}) RETURNING id`;
-      const id = result[0].id;
-      res.send({ id });
+
+      try {
+        const result = await sql`
+      INSERT INTO student (student_id, user_id, edu_mail)
+      VALUES (${studentId}, ${user_id}, ${edu_mail})
+      RETURNING id
+    `;
+
+        res.send({ id: result[0].id });
+      } catch (error) {
+        if (error.code === "23505") {
+          return res.status(400).send({
+            message: "Student ID or Email already exists",
+          });
+        }
+
+        // other errors
+        res.status(500).send({ message: "Student ID or Email already exists" });
+      }
     });
 
     // app.get("/student", async (req, res) => {
@@ -102,8 +123,18 @@ async function run() {
     //   res.json(result);
     // });
 
+    
+    // APi to get Combine Student Info from user + Student Table 
+    app.get("/studentinfo", async (req, res) => {
+      const query = sql`select users.name , student.student_id , student.edu_mail , student.department,student.academic_year,student.academic_semester,student.card_status 
+                        from users 
+                        join student on users.id = student.user_id `
+      const result = await query ;
+      res.json(result) ;
+    });
+
     // APi to get schedule by day and also filter by starting ending locaion
-    app.get("/schedule",async (req, res) => {
+    app.get("/schedule", async (req, res) => {
       const { day, from, to } = req.query;
 
       try {
@@ -137,7 +168,7 @@ async function run() {
     });
 
     // api to get bus details by id
-    app.get("/busses/:id",fireBaseTokenVarify ,async (req, res) => {
+    app.get("/busses/:id", fireBaseTokenVarify, async (req, res) => {
       const { id } = req.params;
       const query = sql`select * from bus_routes where id = ${id}`;
       const result = await query;
