@@ -85,7 +85,7 @@ async function run() {
       res.send({ id });
     });
 
-    // APi to add varified student a role
+    //-------------------------- APi to add varified student a role --------------------------
     app.patch("/users", async (req, res) => {
       const { user_id } = req.body;
       const result =
@@ -93,7 +93,7 @@ async function run() {
       res.send(result);
     });
 
-    // APi to add Varified student to student table
+    //-------------------------- APi to add Varified student to student table --------------------------
     app.post("/student", async (req, res) => {
       const { studentId, edu_mail, user_id } = req.body;
 
@@ -123,8 +123,8 @@ async function run() {
     //   res.json(result);
     // });
 
-    
-    // APi to get Combine Student Info from user + Student Table 
+
+    // -------------------------- APi to get Combine Student Info from user + Student Table --------------------------
     app.get("/studentinfo", async (req, res) => {
       const query = sql`select users.name , student.student_id , student.edu_mail , student.department,student.academic_year,student.academic_semester,student.card_status 
                         from users 
@@ -133,7 +133,7 @@ async function run() {
       res.json(result) ;
     });
 
-    // APi to get schedule by day and also filter by starting ending locaion
+    //-------------------------- APi to get schedule by day and also filter by starting ending locaion --------------------------
     app.get("/schedule", async (req, res) => {
       const { day, from, to } = req.query;
 
@@ -167,7 +167,14 @@ async function run() {
       }
     });
 
-    // api to get bus details by id
+    // ------------------- api to get all the busses -------------------- 
+    app.get('/busses',async(req,res)=>{
+      const query = sql`select route_id,"from","to" ,seats,price,day from bus_routes`
+      const result = await query
+      res.json(result) ;
+    })
+
+    //-------------------------- api to get bus details by id --------------------------
     app.get("/busses/:id", fireBaseTokenVarify, async (req, res) => {
       const { id } = req.params;
       const query = sql`select * from bus_routes where id = ${id}`;
