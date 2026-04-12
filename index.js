@@ -442,6 +442,45 @@ async function run() {
       }
     });
 
+    // --------------------------- GET All Payment Records ---------------------------
+    app.get("/payments", async (req, res) => {
+      try {
+        const payments = await sql`
+      SELECT 
+        ca.id as payment_id,
+        u.name as student_name,
+        s.edu_mail as student_email,
+        ca.paid_amount,
+        ca.created_at
+      FROM card_apply ca
+      JOIN student s ON ca.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      ORDER BY ca.created_at DESC
+    `;
+        res.status(200).send(payments);
+      } catch (error) {
+        console.error("Payment Fetch Error:", error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+
+    // --------------------------- Api to get some stat for overview ------------------------
+    app.get("/payment-stats", async (req, res) => {
+      try {
+        const stats = await sql`
+      SELECT 
+        COUNT(*) as total_count,
+        SUM(paid_amount) as total_revenue
+      FROM card_apply
+    `;
+
+        res.status(200).send(stats[0]);
+      } catch (error) {
+        res.status(500).send({ message: error.message });
+      }
+    });
+
     // const result = await sql`SELECT 1 AS connected`;
     // console.log("Successfully connected to Supabase/PostgreSQL!", result);
   } catch (err) {
