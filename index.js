@@ -123,14 +123,13 @@ async function run() {
     //   res.json(result);
     // });
 
-
     // -------------------------- APi to get Combine Student Info from user + Student Table --------------------------
     app.get("/studentinfo", async (req, res) => {
       const query = sql`select users.name , student.student_id , student.edu_mail , student.department,student.academic_year,student.academic_semester,student.card_status 
                         from users 
-                        join student on users.id = student.user_id `
-      const result = await query ;
-      res.json(result) ;
+                        join student on users.id = student.user_id `;
+      const result = await query;
+      res.json(result);
     });
 
     //-------------------------- APi to get schedule by day and also filter by starting ending locaion --------------------------
@@ -138,7 +137,6 @@ async function run() {
       const { day, from, to } = req.query;
 
       try {
-        // 1. Get routes that contain both stops (if provided)
         let query = sql`SELECT * FROM bus_routes WHERE day = ${day}`;
 
         if (from) query = sql`${query} AND stops_str ILIKE ${"%" + from + "%"}`;
@@ -146,7 +144,6 @@ async function run() {
 
         const routes = await query;
 
-        // 2. Filter by sequence (The "Forward Only" logic)
         const filtered = routes.filter((route) => {
           if (from && to) {
             const stops = route.stops_str
@@ -155,7 +152,6 @@ async function run() {
             const fromIndex = stops.indexOf(from.toLowerCase());
             const toIndex = stops.indexOf(to.toLowerCase());
 
-            // Return true only if 'to' comes after 'from'
             return fromIndex < toIndex;
           }
           return true;
@@ -167,12 +163,12 @@ async function run() {
       }
     });
 
-    // ------------------- api to get all the busses -------------------- 
-    app.get('/busses',async(req,res)=>{
-      const query = sql`select route_id,"from","to" ,seats,price,day from bus_routes`
-      const result = await query
-      res.json(result) ;
-    })
+    // ------------------- api to get all the busses --------------------
+    app.get("/busses", async (req, res) => {
+      const query = sql`select route_id,"from","to" ,seats,price,day from bus_routes`;
+      const result = await query;
+      res.json(result);
+    });
 
     //-------------------------- api to get bus details by id --------------------------
     app.get("/busses/:id", fireBaseTokenVarify, async (req, res) => {
@@ -180,6 +176,157 @@ async function run() {
       const query = sql`select * from bus_routes where id = ${id}`;
       const result = await query;
       res.json(result);
+    });
+
+    // --- Bus Routes API ---
+
+    //------------------------- Get all busses with optional day filter -------------------------
+    app.get("/manage-busses", async (req, res) => {
+      const { day } = req.query;
+      let query;
+      if (day && day !== "All") {
+        query = sql`SELECT * FROM bus_routes WHERE day = ${day} ORDER BY id DESC`;
+      } else {
+        query = sql`SELECT * FROM bus_routes ORDER BY id DESC`;
+      }
+      const result = await query;
+      res.json(result);
+    });
+
+    //------------------------- Add new bus route -------------------------
+    app.post("/bus-routes", async (req, res) => {
+      const {
+        route_id,
+        from,
+        to,
+        from_time,
+        to_time,
+        price,
+        seats,
+        day,
+        stops_str,
+      } = req.body;
+      const result = await sql`
+        INSERT INTO bus_routes (route_id, "from", "to", from_time, to_time, price, seats, day, stops_str)
+        VALUES (${route_id}, ${from}, ${to}, ${from_time}, ${to_time}, ${price}, ${seats}, ${day}, ${stops_str})
+        RETURNING id`;
+      res.json(result[0]);
+    });
+
+    //-------------------- Delete bus route -------------------------
+    app.delete("/bus-routes/:id", async (req, res) => {
+      const { id } = req.params;
+      await sql`DELETE FROM bus_routes WHERE id = ${id}`;
+      res.json({ success: true });
+    });
+
+    // --- Student/User Management API ---
+    app.get("/admin/students", async (req, res) => {
+      const result = await sql`
+        SELECT users.id as user_id, users.name, student.student_id, student.edu_mail, 
+               student.department, student.academic_year, student.academic_semester, student.card_status,student.id as student_id
+        FROM users 
+        LEFT JOIN student ON users.id = student.user_id`;
+      res.json(result);
+    });
+
+    // ---------------------------- UPDATE BUS ROUTE API ----------------------------
+    app.patch("/bus-routes/:id", async (req, res) => {
+      const { id } = req.params;
+      const {
+        route_id,
+        from,
+        to,
+        from_time,
+        to_time,
+        price,
+        seats,
+        day,
+        stops_str,
+      } = req.body;
+
+      try {
+        const result = await sql`
+            UPDATE bus_routes 
+            SET 
+                route_id = ${route_id},
+                "from" = ${from},
+                "to" = ${to},
+                from_time = ${from_time},
+                to_time = ${to_time},
+                price = ${price},
+                seats = ${seats},
+                day = ${day},
+                stops_str = ${stops_str}
+            WHERE id = ${id}
+            RETURNING *`;
+
+        if (result.length === 0) {
+          return res.status(404).json({ error: "Route not found" });
+        }
+
+        res.json({
+          success: true,
+          message: "Route updated successfully",
+          data: result[0],
+        });
+      } catch (error) {
+        console.error("Database Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    // -------------------------- Promote Admin (Set role to admin) --------------------------
+    app.patch("/admin/users/promote/:id", async (req, res) => {
+      const { id } = req.params; 
+      try {
+        await sql`UPDATE users SET role = 'admin' WHERE id = ${id}`;
+        res.status(200).send({ message: "Role updated to admin" });
+      } catch (error) {
+        res.status(500).send({ error: "Promotion failed" });
+      }
+    });
+
+    // -------------------------- Revoke (Set role to user and delete student entry using student_id) --------------------------
+    app.patch("/admin/users/revoke/:id", async (req, res) => {
+      const { id } = req.params; 
+      const { student_id } = req.body; 
+
+      try {
+        await sql`UPDATE users SET role = 'user' WHERE id = ${id}`;
+
+        if (student_id) {
+          await sql`DELETE FROM student WHERE id = ${student_id}`;
+        }
+
+        res
+          .status(200)
+          .send({ message: "Revoked to user and student record deleted" });
+      } catch (error) {
+        res.status(500).send({ error: "Revoke failed" });
+      }
+    });
+
+
+    // -------------------------- Delete (Total removal from users table + student table) --------------------------
+    app.delete("/admin/users/:id", async (req, res) => {
+      const { id } = req.params; 
+      const { student_id } = req.body; 
+
+      try {
+        if (student_id) {
+          await sql`DELETE FROM student WHERE id = ${student_id}`;
+        } else {
+          await sql`DELETE FROM student WHERE user_id = ${id}`;
+        }
+        await sql`DELETE FROM users WHERE id = ${id}`;
+        res
+          .status(200)
+          .send({ message: "User and associated student data deleted." });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Total deletion failed." });
+      }
     });
 
     // const result = await sql`SELECT 1 AS connected`;
