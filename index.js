@@ -329,7 +329,7 @@ async function run() {
       }
     });
 
-    // Api to add info to applied list , update user name and update student info in student table 
+    // Api to add info to applied list , update user name and update student info in student table
     app.post("/apply-transport-card", async (req, res) => {
       const {
         studentId,
@@ -375,17 +375,70 @@ async function run() {
             WHERE id = ${userId}
         `;
 
-        res
-          .status(200)
-          .send({
-            success: true,
-            message: "Application submitted and profiles updated!",
-          });
+        res.status(200).send({
+          success: true,
+          message: "Application submitted and profiles updated!",
+        });
       } catch (error) {
         console.error(error);
         res
           .status(500)
           .send({ message: "Transaction failed", error: error.message });
+      }
+    });
+
+    //----------------------- See all the card applications ---------------------------
+    app.get("/card-applications", async (req, res) => {
+      try {
+        const applications = await sql`
+            SELECT 
+                ca.id as application_id,
+                ca.paid_amount,
+                ca.created_at,
+                s.student_id,
+                s.department,
+                s.card_status,
+                u.name as student_name,
+                s.edu_mail as student_email
+            FROM card_apply ca
+            JOIN student s ON ca.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            ORDER BY ca.created_at DESC
+        `;
+        res.status(200).send(applications);
+      } catch (error) {
+        console.error("Fetch Error:", error);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+    // ----------------------- PATCH Update Application Status -----------------------
+    app.patch("/card-status/:studentId", async (req, res) => {
+      const { status } = req.body;
+      const { studentId } = req.params;
+
+      // 1. Validation: Prevent accidental status strings
+      const allowedStatuses = ["active", "none", "pending"];
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).send({ message: "Invalid status value" });
+      }
+
+      try {
+        const result = await sql`
+            UPDATE student 
+            SET card_status = ${status} 
+            WHERE student_id = ${studentId}
+            RETURNING student_id
+        `;
+
+        if (result.length === 0) {
+          return res.status(404).send({ message: "Student not found" });
+        }
+
+        res.status(200).send({ success: true });
+      } catch (error) {
+        console.error("PATCH Error:", error);
+        res.status(500).send({ message: "Update failed" });
       }
     });
 
